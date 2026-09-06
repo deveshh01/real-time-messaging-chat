@@ -5,7 +5,7 @@
   "description": "Backend — Socket.IO + REST API + Prisma + PostgreSQL",
   "scripts": {
     "dev": "tsx watch server/index.ts",
-    "build": "npx prisma generate && npx tsc --noEmit",
+    "build": "npx prisma@5 generate && tsc --noEmit",
     "start": "cross-env NODE_ENV=production tsx server/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
