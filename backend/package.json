@@ -5,7 +5,7 @@
   "description": "Backend — Socket.IO + REST API + Prisma + PostgreSQL",
   "scripts": {
     "dev": "tsx watch server/index.ts",
-    "build": "prisma generate && tsc --noEmit",
+    "build": "npx prisma generate && tsc --noEmit",
     "start": "cross-env NODE_ENV=production tsx server/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -26,6 +26,7 @@
     "cookie": "^0.6.0",
     "file-type": "^19.6.0",
     "jose": "^5.9.6",
+    "prisma": "^5.22.0",
     "socket.io": "^4.8.1",
     "zod": "^3.23.8"
   },
@@ -37,7 +38,6 @@
     "@types/cookie": "^0.6.0",
     "@types/node": "^20.16.11",
     "cross-env": "^7.0.3",
-    "prisma": "^5.22.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
     "vitest": "^2.1.3"
