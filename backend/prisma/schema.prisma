@@ -1,0 +1,141 @@
+// Prisma schema for the real-time messaging module.
+// See README "Database schema" and "Database indexes" for rationale.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  GIF
+  STICKER
+}
+
+enum AttachmentKind {
+  IMAGE // user-uploaded, moderated
+  GIF // external GIF (Tenor/Giphy) — url only
+  STICKER // bundled sticker pack — url only
+}
+
+enum ModerationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  // The check itself could not complete (model/engine failure, timeout,
+  // unexpected error) — distinct from REJECTED. Never treated as safe to
+  // deliver; see uploadService / README "Image moderation: failure handling".
+  FAILED
+}
+
+model User {
+  id          String  @id @default(cuid())
+  email       String  @unique
+  username    String  @unique
+  displayName String
+  // Null for accounts created via an OAuth provider (e.g. Google).
+  passwordHash String?
+  // Google account subject id; unique so an account links to one Google user.
+  googleId    String? @unique
+  // Optional avatar photo URL (from Google). Falls back to initials + color.
+  image       String?
+  avatarColor String  @default("#4f46e5")
+  createdAt   DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  memberships ConversationMember[]
+  messages    Message[]            @relation("SentMessages")
+  attachments Attachment[]
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  isGroup   Boolean  @default(false)
+  title     String? // optional, for groups
+  createdAt DateTime @default(now())
+  // Bumped whenever a message is persisted, so conversation lists sort cheaply.
+  updatedAt DateTime @default(now())
+
+  members  ConversationMember[]
+  messages Message[]
+
+  @@index([updatedAt])
+}
+
+model ConversationMember {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  role           String   @default("member")
+  joinedAt       DateTime @default(now())
+  // Highest message seq this member has read / had delivered.
+  // Read & delivery state for the *other* party is derived from these,
+  // so we never write a receipt row per message (scales to 10k+ msgs).
+  lastReadSeq      BigInt @default(0)
+  lastDeliveredSeq BigInt @default(0)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // A user can belong to a conversation at most once.
+  @@unique([conversationId, userId])
+  // "conversations for a user" (sidebar) — the hot authorization query.
+  @@index([userId])
+  @@index([conversationId])
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  // Monotonic per-DB ordering key. Cursor pagination & read-state math use this,
+  // NOT createdAt (which can collide) and NOT the cuid (not sortable).
+  seq            BigInt      @default(autoincrement())
+  conversationId String
+  senderId       String
+  type           MessageType @default(TEXT)
+  body           String? // text content; null for pure media messages
+  attachmentId   String?     @unique
+  // Client-generated idempotency key. The DB unique constraint below is the
+  // real duplicate guard — application checks are best-effort only.
+  clientId  String
+  createdAt DateTime @default(now())
+  editedAt  DateTime?
+  deletedAt DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  attachment   Attachment?  @relation(fields: [attachmentId], references: [id])
+
+  // Idempotency: the same (sender, conversation, clientId) can exist only once,
+  // so a retry after a dropped ack can never create a duplicate row.
+  @@unique([conversationId, senderId, clientId])
+  // Primary pagination index: newest-first slice within a conversation.
+  @@index([conversationId, seq])
+}
+
+model Attachment {
+  id       String         @id @default(cuid())
+  kind     AttachmentKind
+  ownerId  String
+  mime     String
+  size     Int            @default(0)
+  width    Int?
+  height   Int?
+  // For IMAGE: private storage key (served only via authorized route).
+  // For GIF/STICKER: external/bundled URL.
+  storageKey       String?
+  url              String?
+  moderationStatus ModerationStatus @default(PENDING)
+  moderationScore  Float?
+  moderationReason String?
+  createdAt        DateTime         @default(now())
+
+  owner   User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  message Message?
+
+  @@index([ownerId])
+}

@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+dist
+*.log
+.env
+.env.local
+.env.*.local
+/uploads
+/data
+coverage
+.DS_Store
+next-env.d.ts
+.model-cache
