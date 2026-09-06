@@ -1,105 +1,65 @@
-# Real-Time Chat App — Simple README
+# 💬 Real-Time Messaging Chat
 
-A 1-to-1 real-time chat app with messaging, image sharing, moderation, and security. Simple to use, solid underneath.
+A modern, full-stack real-time messaging platform built with **Next.js 14**, **Node.js**, **Socket.IO**, **Prisma ORM**, and **PostgreSQL**. Features instant bidirectional communication, Google OAuth, media sharing, GIF integration, and automated image moderation.
 
-Demo login: alice / password123 and bob / password123
+---
 
-## What it does
+## 🚀 Live Demo
 
-- Real-time text, image, GIF, and sticker messages
-- Delivered/read receipts, typing indicator, online status
-- No lost or duplicate messages, even if the connection drops
-- Loads old chat history fast, even with 10,000+ messages
-- Auto-blocks bad language and inappropriate images
-- Secure file uploads
-- Server always checks login and permissions, never trusts the client
-- Rate limiting to stop spam
+- 🌐 **Web Application:** [https://devchat-frontend-9jse.onrender.com](https://devchat-frontend-9jse.onrender.com)
+- ⚙️ **Backend Service:** Hosted on Render with persistent WebSockets
+- 🗄️ **Database:** Cloud Serverless PostgreSQL on Neon
 
-## How it's built
+---
 
-One Node.js server handles everything — the web pages, the API, and the real-time chat (Socket.IO). All the actual logic lives in one shared place, so the API and the real-time system always behave the same way. No microservices, no extra complexity — just what this app actually needs.
+## ✨ Features
 
-Tech used: Next.js, TypeScript, Socket.IO, PostgreSQL + Prisma, JWT login, zod for validation, nsfwjs for image checks, and local/S3 storage.
+- **⚡ Instant Real-Time Chat:** Low-latency bidirectional messaging powered by Socket.IO.
+- **🔐 Flexible Authentication:**
+  - Traditional secure credentials (Argon2 password hashing & HTTP-only JWT sessions).
+  - Social login via **Google OAuth 2.0**.
+- **🟢 Presence & Activity:** Real-time online/offline status indicators and message delivery/read receipts.
+- **📷 Media & File Sharing:** Secure upload handling for images and attachments.
+- **🎉 Rich Reactions & GIFs:** Direct Giphy API integration for inline GIF search and sending.
+- **🛡️ Automated Content Moderation:** Built-in NSFW and image content moderation powered by Sightengine.
+- **⏱️ Spam Protection:** Endpoint rate limiting on authentication, messaging, and uploads.
+- **🎨 Responsive UI:** Clean, polished design crafted with Next.js App Router and Tailwind CSS.
 
-## Database, in short
+---
 
-- Users, Conversations, and Messages are the core tables
-- Instead of saving a "read receipt" for every single message, it just tracks one number per user showing how far they've read — keeps things lightweight
+## 🛠️ Tech Stack
 
-## How messaging works
+### Frontend
+- **Framework:** Next.js 14 (App Router, React 18)
+- **Styling:** Tailwind CSS, Lucide React Icons
+- **Real-Time Client:** Socket.IO Client
+- **Language:** TypeScript
 
-1. You hit send — it shows up instantly on your screen
-2. It's sent to the server (through the socket, or a normal API call if the socket is down)
-3. Server checks your login, your permission, and the message content
-4. It's saved, then delivered to the other person
-5. Status updates: sending → sent → delivered → read (or failed, with a retry option)
+### Backend
+- **Runtime:** Node.js (Standalone HTTP + Socket.IO Server)
+- **Database ORM:** Prisma ORM
+- **Database:** PostgreSQL (Neon Serverless / Local Docker)
+- **Security:** Argon2, Jose (JWT), Custom Rate Limiting
+- **Third-Party Services:** Google OAuth 2.0, Giphy API, Sightengine
 
-If your connection drops, it reconnects automatically and fetches anything you missed — no duplicates, nothing lost.
+---
 
-Each message has a unique ID, so even if it's sent twice by accident, the database only keeps one copy.
+## 📂 Project Structure
 
-## Loading old messages
+This repository is structured as an **npm monorepo workspace**:
 
-Old messages load in pages as you scroll up, instead of loading everything at once — so it stays fast no matter how long the chat history is.
-
-## Image moderation
-
-Every uploaded image is scanned on the server before it's allowed through. If it fails the check — or if the checker itself breaks for some reason — the image gets rejected. It never gets approved by accident. (This was actually a bug before: if the check crashed, the image would silently get approved. That's fixed now.)
-
-There are backup options if the main image-checking tool can't be installed — one that checks via an online service, and one that's for testing only and shouldn't be used for real.
-
-## Bad language filter
-
-Checked on the server, not just on-screen. It catches common tricks like swapping letters for numbers, adding spaces, or repeating letters — while still allowing normal words like "class" or "assist" through.
-
-## Upload security
-
-- File size is limited
-- The real file type is checked, not just its label
-- Uploaded files get a new server-generated name
-- Images are kept private and only shown through an authorized link
-
-## Login & permissions
-
-You can log in with email/password or Google. Either way, you get a secure cookie that only the server can read or verify — the app never trusts anything the client claims about who's logged in.
-
-Every action — reading a chat, sending a message, opening an image — checks that you're actually part of that conversation. So changing an ID in a request can't get you into someone else's chat.
-
-## Running it locally
-
-```
-npm install
-cp .env.example .env
-docker compose up -d db
-npm run db:push
-npm run db:seed
-npm run dev
-```
-
-Then open two browsers and log in as alice and bob to try it out.
-
-## Testing
-
-```
-npm test
-node scripts/rt-test.mjs
-```
-
-To test with a big chat history: `npm run db:seed:load`
-
-## Known limitations
-
-- Runs on a single server for now — scaling to multiple servers needs Redis
-- The bad-language filter is basic, not bulletproof
-- S3 storage support exists but isn't the default — local storage is what's fully tested
-
-## Review summary
-
-Everything was checked by tracing through the code carefully (no live server available while reviewing):
-
-- Image moderation — fixed a bug where failed checks used to silently approve images; now they're rejected
-- Message reliability — no issues found, duplicates and dropped messages are both handled correctly
-- Performance — pagination and queries are efficient, no problems found
-- Security — no vulnerabilities found, permission checks are in place everywhere
-
-Please still run `npm test` and try it locally yourself to confirm everything works end to end.
+```text
+real-time-messaging-chat/
+├── frontend/                # Next.js frontend application
+│   ├── app/                 # App router pages (chat, login, etc.)
+│   ├── components/          # Reusable UI & chat components
+│   ├── hooks/               # Custom hooks (e.g., useChat)
+│   ├── lib/                 # Socket & API client utilities
+│   └── types/               # Frontend DTOs and Socket event types
+├── backend/                 # Standalone backend server
+│   ├── prisma/              # Prisma schema & seed scripts
+│   ├── routes/              # Modular REST API routes (/api/*)
+│   ├── server/              # HTTP router, server init & Socket.IO handlers
+│   └── src/                 # Business logic, services & database client
+├── package.json             # Root monorepo workspace orchestrator
+└── README.md
