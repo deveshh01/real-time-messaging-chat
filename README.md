@@ -1,34 +1,28 @@
-# Real-Time Chat — Simple Guide (Easy Version)
+Real-Time Chat — Simple Guide
 
-Ye ek **1-to-1 real-time chat app** hai jisme messaging, image sharing, moderation, aur security sab kuch production-level tarike se banaya gaya hai. Idea simple hai: **"Upar se simple, andar se strong."**
+A 1-to-1 real-time chat app with messaging, image sharing, moderation, and security, built the production-ready way. The idea: "Simple on the surface, strong underneath."
 
-**Demo login:** `alice / password123` aur `bob / password123`
+Demo login: alice / password123 and bob / password123
 
----
+1. What This App Does
+Real-time text, image, GIF, and sticker messages
+Delivered ✅ / Read ✅✅ receipts, typing indicator, online/offline status
+Messages never get duplicated or lost, even after a dropped connection
+Loads 10,000+ old messages fast (pagination)
+Automatically blocks bad language and inappropriate images
+Uploads are secure — a file can't fake its type to sneak through
+Login and permissions are always checked on the server, never trusted from the client
+Rate limiting to stop spam
+2. Architecture at a Glance
 
-## 1. Ye App Kya Karta Hai
+It's a single Next.js server doing three jobs at once:
 
-- Real-time text, image, GIF aur sticker messages
-- Delivered ✅ / Read ✅✅ receipts, typing indicator, online/offline status
-- Message kabhi duplicate ya miss nahi hoga (reconnect hone par bhi)
-- Purane 10,000+ messages bhi fast load hote hain (pagination)
-- Gaali-galoch (profanity) aur galat images automatically block hoti hain
-- Uploads secure hain — file fake extension laga ke bhi bypass nahi ho sakti
-- Login/permission server pe check hota hai, client pe bharosa nahi kiya jata
-- Spam rokne ke liye rate limiting
+Serving web pages (SSR)
+Handling the REST API
+Running real-time chat (Socket.IO)
 
----
+All business logic lives in one place (services/), so both REST and sockets follow the exact same rules — no duplicated logic.
 
-## 2. Architecture (Ek Nazar Me)
-
-Ye ek **single Next.js server** hai jo teen kaam ek sath karta hai:
-1. Webpage dikhana (SSR)
-2. API (REST) handle karna
-3. Real-time chat (Socket.IO) chalana
-
-Sabka business logic ek hi jagah (`services/`) rakha gaya hai, taaki REST aur Socket dono same rule follow karein — code duplicate nahi hota.
-
-```
 Browser (React)
    │
    ├── REST API (HTTPS)
@@ -36,233 +30,163 @@ Browser (React)
         │
    Node Server (Next.js + Socket.IO)
         │
-   services/ → sara business logic yahin hai
+   services/  →  all business logic lives here
         │
    Database (PostgreSQL) + File Storage
-```
 
-Ye jaanbhoojkar simple rakha gaya hai — koi microservices, koi Kubernetes nahi. Itni si app ke liye itna hi infra kaafi hai.
+This is kept intentionally simple — no microservices, no Kubernetes. That's the right amount of infrastructure for an app this size.
 
----
+3. Tech Stack
+Purpose	Tool	Why
+Framework	Next.js 14	SSR + API + sockets in one place
+Language	TypeScript (strict)	Catches bugs early
+Real-time	Socket.IO	Auto-reconnect, rooms
+Database	PostgreSQL + Prisma	Reliable and type-safe
+Login	JWT cookie + argon2id	Secure, server-controlled
+Validation	zod	One schema for both REST and sockets
+Image check	nsfwjs + tensorflow	Runs locally, no external API needed
+File check	file-type	Checks the real file type, not just the label
+Storage	Local disk / S3	Both supported
+4. Folder Structure (Short Version)
+server/ — server startup + real-time layer
+src/server/services/ — all business logic
+src/server/repositories/ — database queries
+app/ — pages and API routes
+components/chat/ — UI (sidebar, message list, input box)
+hooks/useChat.ts — frontend chat logic
+prisma/ — database schema
+tests/ — automated tests
+5. How the Database Is Designed
+User — login info, profile
+Conversation — a chat (1:1 today, groups could be added later)
+ConversationMember — who's in which chat, and how far they've read
+Message — the actual message, with an order number
+Attachment — image/GIF/sticker, along with its moderation status
 
-## 3. Kaunsi Technology Use Hui
+Smart design choice: instead of storing a separate "read receipt" row for every message, it just tracks one number (a watermark) per user showing how far they've read. This keeps the database lightweight.
 
-| Kaam | Tool | Kyun |
-|---|---|---|
-| Framework | Next.js 14 | Ek hi jagah SSR + API + sockets |
-| Language | TypeScript (strict) | Bugs pehle hi pakad lo |
-| Real-time | Socket.IO | Auto-reconnect, rooms |
-| Database | PostgreSQL + Prisma | Reliable aur type-safe |
-| Login | JWT cookie + argon2id | Secure, server-controlled |
-| Validation | zod | Ek hi schema REST aur socket dono ke liye |
-| Image check | nsfwjs + tensorflow | Bina external API ke chal jaye |
-| File check | file-type | Real file type dekhta hai, fake nahi maanta |
-| Storage | Local disk / S3 | Dono support hai |
+6. How Real-Time Messaging Works
 
----
+Client → server: send message, join a conversation, show typing, etc. Server → client: new message, status updates, typing updates, online status.
 
-## 4. Folder Structure (Short Me)
+Every socket is authenticated using the login cookie — the client never holds a raw token
+Each user has a personal "room," so all their open tabs/devices get updates
+Every action checks that the user is actually a member of that conversation
+7. The Full Message-Sending Flow
+Client immediately shows a "sending..." bubble
+If the socket is connected → sends instantly
+If the socket is down → falls back to a normal API call (same logic either way)
+Server checks: is the login valid? does the user have permission? does the content pass moderation?
+Message is saved to the database
+Sender gets confirmation, and other members see the new message
 
-- `server/` — server start karna + real-time layer
-- `src/server/services/` — sara business logic
-- `src/server/repositories/` — database queries
-- `app/` — pages aur API routes
-- `components/chat/` — UI (sidebar, message list, input box)
-- `hooks/useChat.ts` — frontend ka chat logic
-- `prisma/` — database schema
-- `tests/` — automated tests
+Status flow: sending → sent → delivered → read (or failed, with a retry option, if something goes wrong).
 
----
+8. What Happens If the Connection Drops
 
-## 5. Database Kaise Design Hua
+If the internet/socket disconnects:
 
-- **User** — login details, profile
-- **Conversation** — ek chat (abhi 1:1, aage group bhi ban sakta hai)
-- **ConversationMember** — kaun kis chat me hai, aur usne kaha tak padha/receive kiya
-- **Message** — asli message, order number ke sath
-- **Attachment** — image/GIF/sticker, uski moderation status ke sath
+Any missed messages are fetched automatically on reconnect
+No message gets duplicated, none get lost
+A small banner shows "Reconnecting..." or "Offline"
+9. How Duplicate Messages Are Prevented
+Each message gets a unique ID generated by the client
+The database enforces that this ID must be unique — if the same message is sent twice, the database itself rejects the duplicate
+The frontend also filters out duplicates before they're shown
+10. Loading Old Messages (Pagination)
 
-**Smart decision:** Har message ke liye alag "read receipt" row nahi banayi — bas ek number (watermark) track hota hai ki user ne kaha tak padha. Isse database halka rehta hai.
+Old messages load using a "cursor" method (not offset), so scrolling stays fast even with 10,000+ messages. Only the latest messages load first; older ones load as you scroll up.
 
----
+11. Image Moderation (NSFW Check)
+Every image is checked directly on the server (nsfwjs model) — nothing leaves the server
+The check takes about 1–1.5 seconds
+If an image is flagged as inappropriate, it's rejected instantly and no bytes are ever saved
 
-## 6. Real-Time Kaise Kaam Karta Hai
+Important fix: Previously, if the moderation engine itself crashed (which can happen with native packages), the system would mistakenly approve the image by default. Now, if the check fails, the image is rejected instead ("fail closed"), never approved.
 
-Client se server: message bhejna, conversation join karna, typing dikhana, etc.
-Server se client: naya message, status update, typing update, online status.
+Two alternative setups exist if the local ML model can't be installed:
 
-- Har socket login cookie se authenticate hoti hai — token client ke paas nahi hota
-- Har user ka apna "personal room" hota hai, taaki uske sabhi tabs/devices ko update mile
-- Har action pe check hota hai ki user us conversation ka member hai ya nahi
+Sightengine (online API) — real detection, but slightly slower and images leave the server
+Heuristic mode — for testing only, approves everything, not meant for real use
+12. Bad Language (Profanity) Filter
 
----
+Checked entirely on the server, not just the frontend. It handles:
 
-## 7. Message Bhejne Ka Pura Flow
+Spelling tricks (like sh1t, f**k)
+Spaces inserted between letters
+Repeated letters (like shiiiit)
 
-1. Client turant ek "sending..." bubble dikhata hai
-2. Agar socket connected hai → turant bhej deta hai
-3. Agar socket down hai → normal API call se bhejta hai (same logic)
-4. Server check karta hai: login sahi hai? permission hai? content sahi hai (moderation)?
-5. Message database me save hota hai
-6. Sender ko confirm milta hai, aur baaki members ko naya message dikhta hai
+An allowlist prevents genuine words (like "class", "assist") from being wrongly blocked.
 
-Status: `sending → sent → delivered → read` (ya `failed` agar kuch galat ho, retry ka option milta hai).
+13. Upload Security
+File size is limited
+The file's real type is checked (extension alone isn't trusted)
+The server generates the filename itself (the user's given filename is never used, for security)
+Images stay private and are only accessible through an authorized route
+14. Rate Limiting
 
----
+Sending messages, uploading files, searching GIFs, and logging in are all limited to prevent spam and abuse.
 
-## 8. Connection Toot Jaye To Kya Hota Hai
+15. Login System (Authentication)
 
-Agar internet/socket disconnect ho jaye:
-- Reconnect hote hi purane missed messages automatically fetch ho jaate hain
-- Koi message duplicate nahi hota, koi miss nahi hota
-- User ko halka sa banner dikhta hai — "Reconnecting..." ya "Offline"
+Two ways to log in:
 
----
+Email/Username + Password (secured with argon2)
+Google Login (a manual OAuth flow, no extra library needed)
 
-## 9. Duplicate Message Kaise Roka Jata Hai
+Both result in a secure cookie that only the server can verify. The client can't read or tamper with it.
 
-- Har message ka ek unique ID client generate karta hai
-- Database me ye ID unique honi hi chahiye — agar same message do baar bheja gaya to database khud reject kar dega
-- Frontend bhi duplicate ko dikhne se pehle hi filter kar deta hai
+16. Permission Checks (Authorization)
 
----
+A single function (assertMembership) is used everywhere to check whether a user actually belongs to a conversation. This prevents anyone from accessing someone else's chat or data by simply changing an ID (no IDOR vulnerability).
 
-## 10. Purane Messages Load Karna (Pagination)
-
-Purane messages "cursor" based tarike se load hote hain (offset nahi) — isliye 10,000+ messages ho bhi to loading fast rehti hai. Pehle sirf latest messages aate hain, upar scroll karne pe purane load hote hain.
-
----
-
-## 11. Image Moderation (NSFW Check)
-
-- Har image server pe hi check hoti hai (nsfwjs model), bahar kahi nahi jaati
-- Check hone me lagbhag 1–1.5 second lagta hai
-- Agar image inappropriate lagi → turant reject, koi bhi bytes save nahi hote
-
-**Important fix:** Pehle agar moderation engine hi crash ho jaye (jo native packages ki wajah se kabhi kabhi hota hai), to system galti se image ko **approve** kar deta tha. Ab aisa nahi hoga — agar check fail ho jaye to image **reject** hi hogi ("fail closed"), approve nahi.
-
-Do alternative options bhi hain agar local ML model install na ho:
-- **Sightengine** (online API) — real detection, par thoda slow aur images bahar jaati hain
-- **Heuristic mode** — sirf testing ke liye, sab kuch approve kar deta hai, real use ke liye nahi
-
----
-
-## 12. Gaali-Galoch (Profanity) Filter
-
-Server pe hi check hota hai, sirf frontend pe nahi. Ye chize handle karta hai:
-- Spelling tricks (jaise `sh1t`, `f**k`)
-- Letters ke beech space daalna
-- Letters repeat karna (jaise `shiiiit`)
-
-Galat words wale genuine words (jaise "class", "assist") galti se block na ho, iske liye allowlist bhi hai.
-
----
-
-## 13. Upload Security
-
-- File size limited hai
-- File ka real type check hota hai (extension pe bharosa nahi)
-- File ka naam server khud generate karta hai (user ka diya naam use nahi hota — security ke liye)
-- Images private rehti hain, sirf authorized route se hi dikhti hain
-
----
-
-## 14. Rate Limiting
-
-Message bhejna, upload karna, GIF search, login — sab pe limit hai taaki koi spam na kar sake.
-
----
-
-## 15. Login System (Authentication)
-
-Do tarike se login ho sakta hai:
-1. **Email/Username + Password** (argon2 se secure)
-2. **Google Login** (manual OAuth flow, bina extra library ke)
-
-Dono me end me ek secure cookie milti hai jo server hi verify karta hai. Client ye cookie padh ya badal nahi sakta.
-
----
-
-## 16. Permission Check (Authorization)
-
-Ek hi function (`assertMembership`) har jagah use hota hai ye check karne ke liye ki user us conversation ka member hai ya nahi. Isse koi bhi "IDOR" attack (yani kisi aur ki chat/ID access karna) possible nahi hai.
-
----
-
-## 17. Security — Short List
-
-- Login/permission server pe hi verify hota hai
-- Koi bhi kisi dusre ka data access nahi kar sakta
-- Upload secure hai
-- Bina check hui image kabhi save/dikh nahi sakti
-- Gaali filter server pe hai
-- Sara input validate hota hai
-- Rate limiting hai
-- Errors me internal detail leak nahi hoti
-
----
-
-## 18. Performance
-
-- Purane messages fast load hote hain
-- Read/delivery status calculate karna cheap hai (extra rows nahi banti)
-- Chat list load karna bhi fast hai (koi extra queries nahi)
-- Images lazy-load hoti hain, typing events throttle hote hain
-
----
-
-## 19. App Ko Local Me Chalana
-
-```bash
+17. Security — Quick List
+Login and permissions are always verified server-side
+No one can access another user's data
+Uploads are secure
+Unchecked images are never saved or shown
+Bad-language filter runs on the server
+All input is validated
+Rate limiting is in place
+Errors never leak internal details
+18. Performance
+Old messages load fast
+Read/delivery status is calculated cheaply (no extra rows per message)
+Chat list loads quickly (no extra unnecessary queries)
+Images load lazily, typing events are throttled
+19. Running It Locally
+bash
 npm install
-cp .env.example .env          # AUTH_SECRET set karo
-docker compose up -d db       # Postgres start karo
-npm run db:push               # tables banao
-npm run db:seed               # demo users banao (alice/bob)
-npm run dev                   # http://localhost:3000 pe khulega
-```
+cp .env.example .env          # set a strong AUTH_SECRET
+docker compose up -d db       # start Postgres
+npm run db:push               # create tables
+npm run db:seed               # create demo users (alice/bob)
+npm run dev                   # opens at http://localhost:3000
 
-Do browsers (ya normal + incognito) me alice aur bob se login karo real-time chat dekhne ke liye.
+Open two browsers (or a normal + incognito window) and log in as alice and bob to see real-time chat in action.
 
----
-
-## 20. Testing
-
-```bash
+20. Testing
+bash
 npm test                 # unit tests
 node scripts/rt-test.mjs # real-time end-to-end test
-```
 
-Bade message history (10,000+) test karne ke liye:
-```bash
+To test with a large message history (10,000+):
+
+bash
 npm run db:seed:load
-```
+21. Deployment Notes
+Use npm run start (not next start — that won't support sockets)
+Make sure to set DATABASE_URL, AUTH_SECRET, and NODE_ENV=production
+For multiple server instances, move storage to S3 and rate limiting to Redis
+22. Known Limitations (Trade-offs)
+Everything currently runs on a single server (scaling needs Redis)
+The profanity filter is simple, not perfect — but easy to improve
+S3 storage is a documented stub for now; local storage fully works and is tested
+23. Final Review Summary (All Points Checked)
+Point	Status	Finding
+Image Moderation	✅ Fixed	Previously auto-approved on failure; now correctly rejects
+Message Reliability	✅ Pass	No duplicate or missing message issues found
+Performance	✅ Pass	Pagination works correctly, no N+1 query issues
+Security	✅ Pass	No vulnerabilities found; permission checks are everywhere
 
----
-
-## 21. Deployment Ke Liye Zaroori Baatein
-
-- `npm run start` use karo (`next start` nahi — usme sockets kaam nahi karenge)
-- `DATABASE_URL`, `AUTH_SECRET` zaroor set karo, `NODE_ENV=production` bhi
-- Multiple servers chalane ho to storage ko S3 aur rate-limit ko Redis pe move karo
-
----
-
-## 22. Jaani-Boojhi Limitations (Trade-offs)
-
-- Abhi sab kuch single server pe chalta hai (scaling ke liye Redis chahiye hoga)
-- Profanity filter simple hai, perfect nahi (par easily improve ho sakta hai)
-- S3 storage abhi sirf documented stub hai, local storage hi fully kaam karta hai
-
----
-
-## 23. Final Review Summary (Sab Points Check Kiye Gaye)
-
-| Point | Status | Kya Mila |
-|---|---|---|
-| Image Moderation | ✅ Fixed | Pehle fail hone pe auto-approve ho jata tha, ab reject hota hai |
-| Message Reliability | ✅ Pass | Duplicate/miss messages ka koi issue nahi mila |
-| Performance | ✅ Pass | Pagination sahi hai, koi N+1 query issue nahi mila |
-| Security | ✅ Pass | Koi vulnerability nahi mili, sab jagah permission check hai |
-
-**Note:** Ye review code padh ke (manual tracing) kiya gaya hai, kyunki is sandbox me internet/database access nahi tha. Isliye `npm install`, `npm test`, `npm run build` khud chala ke confirm zaroor karein.
+Note: This review was done through manual code tracing, since this sandbox had no internet/database access. Please run npm install, npm test, and npm run build yourself to confirm everything.
