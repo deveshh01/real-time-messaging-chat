@@ -21,14 +21,6 @@ export async function getAuthUser(req?: Request): Promise<AuthUser | null> {
   let token: string | null = null;
   if (req) {
     token = readTokenFromCookieHeader(req.headers.get("cookie"));
-  } else {
-    try {
-      // Dynamic import in case called in Next.js environment
-      const { cookies } = await import("next/headers");
-      token = cookies().get(SESSION_COOKIE)?.value ?? null;
-    } catch {
-      token = null;
-    }
   }
   if (!token) return null;
   const claims = await verifySessionToken(token);
