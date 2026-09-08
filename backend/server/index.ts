@@ -13,6 +13,14 @@ import { handleHttpApi } from "./httpRouter";
  */
 async function main() {
   const httpServer = createServer(async (req, res) => {
+    const url = new URL(req.url ?? "/", `http://${req.headers.host || "localhost"}`);
+    if (url.pathname === "/" || url.pathname === "/health") {
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ status: "ok", service: "devchat-backend" }));
+      return;
+    }
+
     const handled = await handleHttpApi(req, res);
     if (!handled) {
       res.statusCode = 404;
@@ -32,8 +40,8 @@ async function main() {
   registerHandlers(io);
   setIO(io);
 
-  httpServer.listen(env.PORT, () => {
-    logger.info(`server ready`, { url: `http://localhost:${env.PORT}`, env: env.NODE_ENV });
+  httpServer.listen(env.PORT, "0.0.0.0", () => {
+    logger.info(`server ready`, { url: `http://0.0.0.0:${env.PORT}`, env: env.NODE_ENV });
   });
 
   const shutdown = (signal: string) => {
